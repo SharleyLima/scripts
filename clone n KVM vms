@@ -1,0 +1,30 @@
+#!/bin/bash
+#Script for manual clones of n KVM vms from a template vm. You need to have the xml and qcow2 directory of the base vm
+#The advantage of this script is that you can enter a different destination location for your virtual machines
+echo "Enter the number of clones."
+read nclones
+
+#Dirbase variable referring to the qcow2 base directory.
+dirbase="/kvm/images/zfsbase/zfsbase.qcow2"
+
+#xmlbase variable referring to the base xml directory.
+xmlbase="/kvm/images/zfsbase/zfsbase.xml"
+
+#Variable referring to the destination directory of the cloned vms.
+dirtarget="/kvm/images"
+
+#Variable namexml stores the host name found in xmlbase to be replaced by the new name.
+namexml=$(cat $xmlbase | grep "<name>" | sed -e 's/\s*<name>\(.*\)<.*>/\1/')
+
+#start of the loop to create the vms
+for ((i=1; i<=$nclones; i++))
+do
+        in=$(printf "%02d" $i)      #adds two digits to the in variable.
+        echo "creating vm$in..."
+        mkdir $dirtarget/vm$in      #creates directory where the xml and qcow2 of the vm will be stored
+        rsync --sparse -z $dirbase $dirtarget/vm$in/vm$in.qcow2      #Copy the base disk to the new destination directory
+        cp $xmlbase $dirtarget/vm$in/vm$in.xml                       #Copy base xml to new destination directory
+        sed -i "s|$namexml|vm$in|g" $dirtarget/vm$in/vm$in.xml       #Replace the base vm name with the new vm name throughout the xml
+        virsh define $dirtarget/vm$in/vm$in.xml                      #Defines the new vm from the xml changed in the previous line
+        virt-sysprep --operations customize,machine-id -d vm$in --hostname vm$in   #sysprep to reset machine id and hostname
+done
